@@ -1,0 +1,26 @@
+# Core Framework
+langgraph>=0.0.50
+langchain>=0.1.0
+langchain-openai>=0.0.5
+langchain-community>=0.0.20
+
+# Zhipu AI
+zhipuai>=2.0.1
+
+# Tools
+tavily-python>=0.3.0
+
+# Environment Management
+python-dotenv>=1.0.0
+
+# Data Processing
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+typing-extensions>=4.5.0
+
+# Utils
+tqdm>=4.65.0
+jsonlines>=4.0.0
+
+# Progress bar
+tqdm>=4.65.0

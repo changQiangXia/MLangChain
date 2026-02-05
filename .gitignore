@@ -1,0 +1,88 @@
+# ============================================
+# Python
+# ============================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# ============================================
+# Testing & Coverage
+# ============================================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+.pytype/
+
+# ============================================
+# IDEs & Editors
+# ============================================
+# VS Code
+.vscode/
+*.code-workspace
+
+# PyCharm / IntelliJ
+.idea/
+*.iml
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# ============================================
+# Environment & Secrets
+# ============================================
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ============================================
+# Logs & Data
+# ============================================
+*.log
+logs/
+
+# Output data files (generated)
+data/output/*.jsonl
+data/output/*.json
+data/output/*.txt
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# ============================================
+# OS Generated
+# ============================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================
+# Markdown Documents (保留 README.md)
+# ============================================
+# 忽略所有 md 文件，但保留 README.md
+*.md
+!README.md
