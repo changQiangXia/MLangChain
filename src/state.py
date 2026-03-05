@@ -66,6 +66,12 @@ class GraphState(TypedDict, total=False):
     best_score_so_far: float                 # 历史最佳分数
     retry_count: int                         # 连续重试次数（用于温度调整）
     current_temperature: float               # 当前温度（动态调整）
+    needs_rollback: bool
+
+    # Workflow V2 临时字段（需声明，否则 LangGraph 节点间会丢失）
+    _generated_versions: List[dict]
+    _best_version_index: int
+    _best_of_n_score: float
 
 
 def initialize_state(task_description: str) -> GraphState:
@@ -88,5 +94,9 @@ def initialize_state(task_description: str) -> GraphState:
         best_draft_so_far=None,
         best_score_so_far=0.0,
         retry_count=0,
-        current_temperature=0.3  # 默认温度
+        current_temperature=0.3,  # 默认温度
+        needs_rollback=False,
+        _generated_versions=[],
+        _best_version_index=0,
+        _best_of_n_score=0.0
     )

@@ -3,7 +3,6 @@ Generator Agent
 基于搜索结果或知识库生成初始指令数据 (Alpaca格式)
 """
 
-import json
 from typing import Optional
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -12,6 +11,7 @@ from src.state import AlpacaData, GraphState
 from src.tools.search_tool import SearchTool
 from src.llm_factory import create_llm
 from src.core.few_shot_examples import get_few_shot_prompt
+from src.core.safe_json_utils import safe_json_loads
 
 
 class GeneratorAgent:
@@ -168,23 +168,15 @@ class GeneratorAgent:
         
         # 解析 JSON 输出
         try:
-            content = response.content
-            # 清理控制字符
-            import re
-            content = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', content)
-            
-            # 尝试从 Markdown 代码块中提取 JSON
-            if "```json" in content:
-                json_str = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                json_str = content.split("```")[1].split("```")[0].strip()
-            else:
-                json_str = content.strip()
-            
-            data = json.loads(json_str)
+            content = response.content if response is not None else ""
+            data = safe_json_loads(content, default=None)
+            if not isinstance(data, dict):
+                raise ValueError("JSON parsing returned non-dict data")
+            if not isinstance(data.get("output", ""), str):
+                data["output"] = str(data.get("output", ""))
             return AlpacaData(**data)
             
-        except (json.JSONDecodeError, Exception) as e:
+        except Exception as e:
             print(f"[Generator Error] JSON 解析失败: {e}")
             # 返回一个带有错误信息的默认数据
             return AlpacaData(

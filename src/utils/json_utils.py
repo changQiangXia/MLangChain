@@ -111,6 +111,10 @@ def sanitize_for_json(text: str) -> str:
     
     用于清理 LLM 生成的 output 字段
     """
+    if text is None:
+        return ""
+    if not isinstance(text, str):
+        text = str(text)
     if not text:
         return text
     

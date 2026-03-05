@@ -4,6 +4,7 @@
 """
 
 import json
+import os
 from typing import List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -99,6 +100,9 @@ class BatchProcessor:
     
     def save_results(self, output_path: str):
         """保存结果到文件"""
+        output_dir = os.path.dirname(output_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
         with open(output_path, 'w', encoding='utf-8') as f:
             for result in self.results:
                 json.dump(result, f, ensure_ascii=False)

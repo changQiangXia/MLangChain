@@ -4,6 +4,7 @@ Main Entry Point
 """
 
 import json
+import os
 import argparse
 from typing import Optional
 
@@ -43,6 +44,9 @@ def print_result(result: dict):
 def save_to_jsonl(data: dict, filename: str):
     """保存结果到 JSONL 文件"""
     try:
+        output_dir = os.path.dirname(filename)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
         with open(filename, 'a', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False)
             f.write('\n')
