@@ -3,7 +3,7 @@ Workflow V2 - 集成 Best-of-N + 模拟退火回滚机制
 
 核心改进：
 1. Generator 生成 N 个版本（N=2 或 3）
-2. Critic 使用 Pairwise Comparison 选择最佳
+2. Selector 使用 Pairwise Comparison 选择最佳
 3. **新增**: 模拟退火回滚机制 - 防止分数下降
 4. **新增**: 动态温度调整 - 帮助跳出局部最优
 """

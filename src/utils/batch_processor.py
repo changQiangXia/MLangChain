@@ -5,10 +5,10 @@
 
 import json
 import os
-from typing import List
+from typing import Callable, List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from src.graph.workflow import generate_high_quality_data
+from src.graph.workflow_v2 import generate_with_best_of_n
 from src.utils.data_utils import is_duplicate, calculate_dataset_stats
 
 
@@ -20,19 +20,21 @@ class BatchProcessor:
         max_workers: int = 2,
         similarity_threshold: float = 0.85,
         min_quality_score: float = 8.0,
-        enable_deduplication: bool = True
+        enable_deduplication: bool = True,
+        generation_fn: Optional[Callable[[str], dict]] = None
     ):
         self.max_workers = max_workers
         self.similarity_threshold = similarity_threshold
         self.min_quality_score = min_quality_score
         self.enable_deduplication = enable_deduplication
+        self.generation_fn = generation_fn or generate_with_best_of_n
         self.results: List[dict] = []
         self.failed_tasks: List[str] = []
     
     def process_single_task(self, task: str) -> dict:
         """处理单个任务"""
         try:
-            result = generate_high_quality_data(task)
+            result = self.generation_fn(task)
             return result
         except Exception as e:
             print(f"[Error] 任务 '{task}' 失败: {e}")
