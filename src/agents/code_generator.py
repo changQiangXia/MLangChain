@@ -1,129 +1,164 @@
 """
 Code Generator Agent
-专门生成包含代码示例的指令数据
+Generate instruction data that includes runnable code examples.
 """
 
-import json
 import re
 from typing import Optional
+
 from langchain_core.prompts import ChatPromptTemplate
 
 from config.settings import settings
-from src.state import AlpacaData, GraphState
+from src.core.safe_json_utils import safe_json_loads
 from src.llm_factory import create_llm
+from src.state import AlpacaData
 
 
 class CodeGeneratorAgent:
-    """
-    代码生成器 Agent：生成包含实际代码示例的指令数据
-    """
-    
+    """Generate instruction-following data with code examples."""
+
     def __init__(self, model_name: Optional[str] = None):
         self.model_name = model_name or settings.default_model
         self.llm = create_llm(model_name=self.model_name, temperature=0.4)
-    
+
     def _get_code_generation_prompt(self) -> ChatPromptTemplate:
-        """获取代码生成任务的 Prompt"""
-        
         system_template = """你是一个专业的代码示例生成专家。
-你的任务是为技术概念生成包含实际可运行代码的指令数据。
-
-## 代码要求
-1. **可运行**：代码必须是完整、可运行的，不能是伪代码
-2. **实用性**：代码要展示概念的实际应用
-3. **注释清晰**：关键步骤要有中文注释
-4. **渐进式**：从简单示例到复杂应用
-
-## 支持的语言
-- Python（首选，用于机器学习/深度学习）
-- 伪代码（用于解释算法原理）
-- 具体框架代码（PyTorch/TensorFlow）
-
-## 格式要求
-代码块使用 markdown 格式：
-```python
-# 代码注释
-代码内容
-```
-"""
-
-        human_template = """为主题 "{task_description}" 生成包含代码示例的指令数据。
+你的任务是为技术主题生成包含可运行代码的指令数据。
 
 要求：
-1. 指令要明确要求"请提供Python代码示例"
-2. output 必须包含：
-   - 概念解释（200字）
-   - 简单代码示例（带注释）
-   - 实际应用场景代码（可选）
-3. 代码必须是可运行的Python代码
+1. 代码必须完整、可运行，不要输出伪代码
+2. 解释要清晰，代码要有必要注释
+3. 优先输出 Python 示例
+4. 返回严格 JSON，output 字段必须是字符串
+"""
 
-输出格式（JSON）：
+        human_template = """请围绕主题“{task_description}”生成一条包含代码示例的指令数据。
+
+输出格式：
 ```json
 {{
-  "instruction": "请解释{task_description}，并提供Python代码示例",
+  "instruction": "请解释{task_description}，并提供 Python 代码示例",
   "input": "",
-  "output": "## 概念解释\\n...\\n\\n## 代码示例\\n```python\\n# 代码\\n```\\n\\n## 实际应用\\n..."
+  "output": "## 概念解释\\n...\\n\\n## 代码示例\\n```python\\n# code\\n```\\n\\n## 说明\\n..."
 }}
 ```
 """
 
         return ChatPromptTemplate.from_messages([
             ("system", system_template),
-            ("human", human_template)
+            ("human", human_template),
         ])
-    
-    def generate_with_code(
-        self, 
-        task_description: str
-    ) -> AlpacaData:
-        """生成包含代码的指令数据"""
-        
+
+    def generate_with_code(self, task_description: str) -> AlpacaData:
         prompt = self._get_code_generation_prompt()
         chain = prompt | self.llm
-        
-        response = chain.invoke({
-            "task_description": task_description
-        })
-        
+
+        max_retries = 3
+        response = None
+
+        for attempt in range(max_retries):
+            try:
+                response = chain.invoke({"task_description": task_description})
+                break
+            except Exception as exc:
+                error_text = str(exc).lower()
+                if "timeout" in error_text or "read operation" in error_text:
+                    print(f"[CodeGenerator] API timeout, retry {attempt + 1}/{max_retries}...")
+                    if attempt == max_retries - 1:
+                        return self._build_fallback(task_description, f"API timeout: {exc}")
+                    import time
+
+                    time.sleep(2 ** attempt)
+                    continue
+
+                print(f"[CodeGenerator Error] API call failed: {exc}")
+                return self._build_fallback(task_description, f"API call failed: {exc}")
+
         try:
-            content = response.content
-            content = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', content)
-            
-            if "```json" in content:
-                json_str = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                json_str = content.split("```")[1].split("```")[0].strip()
-            else:
-                json_str = content.strip()
-            
-            data = json.loads(json_str)
+            content = response.content if response is not None else ""
+            content = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", content)
+
+            data = safe_json_loads(content, default=None)
+            if not isinstance(data, dict):
+                data = self._parse_relaxed_response(content)
+            if not isinstance(data, dict):
+                raise ValueError("JSON parsing returned non-dict data")
+
+            if not isinstance(data.get("output", ""), str):
+                data["output"] = str(data.get("output", ""))
             return AlpacaData(**data)
-            
-        except (json.JSONDecodeError, Exception) as e:
-            print(f"[CodeGenerator Error] JSON 解析失败: {e}")
-            return AlpacaData(
-                instruction=f"请解释{task_description}并提供代码示例",
-                input="",
-                output=f"生成失败，错误: {e}"
-            )
+        except Exception as exc:
+            print(f"[CodeGenerator Error] JSON parse failed: {exc}")
+            return self._build_fallback(task_description, f"JSON parse failed: {exc}")
+
+    def _parse_relaxed_response(self, content: str) -> Optional[dict]:
+        """Parse near-JSON responses that contain raw multiline code blocks."""
+        body = content.strip()
+        if body.startswith("```json"):
+            body = body[len("```json"):].strip()
+        elif body.startswith("```"):
+            body = body[len("```"):].strip()
+        if body.endswith("```"):
+            body = body[:-3].strip()
+
+        instruction_match = re.search(
+            r'"instruction"\s*:\s*"(?P<value>.*?)"\s*,\s*"input"',
+            body,
+            re.DOTALL,
+        )
+        input_match = re.search(
+            r'"input"\s*:\s*"(?P<value>.*?)"\s*,\s*"output"',
+            body,
+            re.DOTALL,
+        )
+        output_match = re.search(
+            r'"output"\s*:\s*"(?P<value>.*)"\s*}\s*$',
+            body,
+            re.DOTALL,
+        )
+
+        if not instruction_match or not output_match:
+            return None
+
+        return {
+            "instruction": self._unescape_text(instruction_match.group("value")),
+            "input": self._unescape_text(input_match.group("value")) if input_match else "",
+            "output": self._unescape_text(output_match.group("value")),
+        }
+
+    def _unescape_text(self, text: str) -> str:
+        """Unescape common JSON-style sequences used by model output."""
+        return (
+            text.replace("\\\\", "\\")
+            .replace('\\"', '"')
+            .replace("\\n", "\n")
+            .replace("\\r", "\r")
+            .replace("\\t", "\t")
+            .strip()
+        )
+
+    def _build_fallback(self, task_description: str, error: str) -> AlpacaData:
+        return AlpacaData(
+            instruction=f"请解释{task_description}，并提供 Python 代码示例",
+            input="",
+            output=f"代码生成失败，请重试。错误: {error}",
+        )
 
 
 def enhance_with_code(existing_data: AlpacaData, task_description: str) -> AlpacaData:
-    """
-    为现有数据添加代码示例
-    """
+    """Append generated code examples to existing data."""
+
     generator = CodeGeneratorAgent()
     code_data = generator.generate_with_code(task_description)
-    
-    # 合并原有内容和代码
+
     enhanced_output = f"""{existing_data.output}
 
 ## 代码示例
 {code_data.output}
 """
-    
+
     return AlpacaData(
         instruction=f"{existing_data.instruction}，并提供代码示例",
         input=existing_data.input,
-        output=enhanced_output
+        output=enhanced_output,
     )
