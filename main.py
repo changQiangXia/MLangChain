@@ -7,6 +7,7 @@ import json
 import os
 
 from src.agents.code_generator import CodeGeneratorAgent
+from src.core.code_validator import CodeValidator, extract_code_from_output
 from src.graph.workflow_v2 import generate_with_best_of_n as generate_high_quality_data
 from src.utils.batch_processor import BatchProcessor
 from src.utils.data_utils import calculate_dataset_stats, load_jsonl
@@ -103,13 +104,36 @@ def interactive_mode():
             if generate_code:
                 agent = CodeGeneratorAgent()
                 data = agent.generate_with_code(task)
+                validator = CodeValidator()
+                code = extract_code_from_output(data.output)
+
+                if code:
+                    validation = validator.validate(code)
+                    score = validator.calculate_quality_score(validation)
+                    success = validation.syntax_valid and validation.can_execute
+                    feedback = "交互式代码模式：基于代码验证器的快速评分，未接入主流程 CriticV2"
+                    metadata = {
+                        "mode": "code_generation",
+                        "evaluation": "quick_code_validation",
+                        "syntax_valid": validation.syntax_valid,
+                        "can_execute": validation.can_execute,
+                    }
+                else:
+                    score = 3.0
+                    success = False
+                    feedback = "交互式代码模式：未提取到可验证代码块，未接入主流程 CriticV2"
+                    metadata = {
+                        "mode": "code_generation",
+                        "evaluation": "no_extractable_code",
+                    }
+
                 result = {
-                    "success": "失败" not in data.output and "error" not in data.output.lower(),
-                    "score": 8.5,
+                    "success": success,
+                    "score": score,
                     "iterations": 1,
                     "data": data.to_dict(),
-                    "feedback": "包含 Python 代码示例的指令数据",
-                    "metadata": {"mode": "code_generation"},
+                    "feedback": feedback,
+                    "metadata": metadata,
                     "error": None,
                 }
             else:
