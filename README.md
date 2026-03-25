@@ -59,59 +59,31 @@
 
 ## 🏗️ 系统架构
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    User Input / CLI                    │
-│              (交互式 / 单任务 / 批处理)                  │
-└─────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│                main.py / BatchProcessor                 │
-│         (CLI 默认统一走 workflow_v2.py)                 │
-└─────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│        Generator / Multi-Version Generator              │
-│       (默认生成 2 个候选版本，用于 Best-of-N)            │
-└─────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│                  Best-of-N Selector                     │
-│           (Pairwise Comparison 选择最佳版本)             │
-└─────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│                      Critic V2                          │
-│  ├─ Task Classifier                                     │
-│  ├─ 动态评分标准                                        │
-│  ├─ Complexity Evaluator                                │
-│  └─ Fact Checker / RAG 验证                             │
-└─────────────────────────────────────────────────────────┘
-                           │
-              ┌────────────┴──────────────┐
-              │                           │
-   Score ≥ threshold / 达到上限      Score < threshold
-              │                           │
-              ▼                           ▼
-            [END]                  Rollback Check
-                                         │
-                   ┌─────────────────────┴─────────────────────┐
-                   │                                           │
-             分数正常，继续优化                           分数明显下降，回滚
-                   │                                           │
-                   ▼                                           ▼
-                Refiner                              恢复 best_draft
-                   │                                           │
-                   └───────────────────┬───────────────────────┘
-                                       │
-                                       ▼
-                                   Generator
-                                       │
-                                       └────── 循环直到达标或达到最大迭代
+```mermaid
+flowchart LR
+    U["User Input / CLI<br/>交互式 / 单任务 / 批处理"]
+    E["main.py / BatchProcessor<br/>CLI 默认统一走 workflow_v2.py"]
+    G["Generator / Multi-Version Generator<br/>默认生成 2 个候选版本"]
+    B["Best-of-N Selector<br/>Pairwise Comparison 选择最佳版本"]
+    C["CriticV2"]
+    D{"达到阈值<br/>或达到上限?"}
+    End["END"]
+    R["Rollback Check"]
+    F["Refiner"]
+    Restore["恢复 best_draft"]
+
+    U --> E --> G --> B --> C --> D
+    D -- 是 --> End
+    D -- 否 --> R
+    R -- 分数正常，继续优化 --> F
+    R -- 分数明显下降，回滚 --> Restore
+    F --> G
+    Restore --> G
+
+    N["CriticV2 内部能力<br/>Task Classifier | 动态评分标准 | Complexity Evaluator | Fact Checker / RAG 验证"]:::note
+    C -. 内部能力 .-> N
+
+    classDef note fill:#f6f8fa,stroke:#9aa4b2,color:#24292f;
 ```
 
 说明：`Task Classifier`、`Complexity Evaluator` 和 `Fact Checker` 都是 `CriticV2` 的内部能力，不是独立的 LangGraph 节点。
