@@ -59,17 +59,30 @@
 
 ## 🏗️ 系统架构
 
-```
-[User Input / CLI: 交互式 / 单任务 / 批处理]
-    -> [main.py / BatchProcessor: CLI 默认统一走 workflow_v2.py]
-    -> [Generator / Multi-Version Generator: 默认生成 2 个候选版本]
-    -> [Best-of-N Selector: Pairwise 选择最佳版本]
-    -> [CriticV2: Task Classifier | 动态评分标准 | Complexity Evaluator | Fact Checker / RAG 验证]
-    -> {达到阈值或达到上限？}
-         |-- 是 --> [END]
-         `-- 否 --> [Rollback Check]
-                      |-- 分数正常，继续优化 --> [Refiner] --------\
-                      `-- 分数明显下降，回滚 --> [恢复 best_draft] --+--> [回到 Generator]
+```mermaid
+flowchart LR
+    A["用户输入 CLI"]
+    B["BatchProcessor<br>workflow_v2.py"]
+    C["多版本生成器<br>2个候选版"]
+    D["最优版本选择"]
+    E["CriticV2 评测"]
+    F{"达标/上限?"}
+    G["END"]
+    H["回滚检查"]
+    I["Refiner 优化"]
+    J["恢复最佳版本"]
+
+    A-->B
+    B-->C
+    C-->D
+    D-->E
+    E-->F
+    F-- 是 -->G
+    F-- 否 -->H
+    H-->I
+    H-->J
+    I-->C
+    J-->C
 ```
 
 说明：`Task Classifier`、`Complexity Evaluator` 和 `Fact Checker` 都是 `CriticV2` 的内部能力，不是独立的 LangGraph 节点。
